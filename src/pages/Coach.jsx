@@ -20,12 +20,15 @@ const STATUS = {
 
 let currentAudio = null
 
-async function speak(text, onEnd, settings = {}) {
-  // Stop any current speech
+function stopAll() {
   window.speechSynthesis.cancel()
   if (currentAudio) { currentAudio.pause(); currentAudio = null }
+}
 
-  // ElevenLabs (custom voice)
+async function speak(text, onEnd, settings = {}, onError) {
+  stopAll()
+
+  // ElevenLabs uniquement si configuré
   if (settings.elevenLabsKey && settings.elevenLabsVoiceId) {
     try {
       const res = await fetch(
@@ -43,19 +46,26 @@ async function speak(text, onEnd, settings = {}) {
           }),
         }
       )
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        currentAudio = audio
-        audio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; onEnd?.() }
-        audio.play()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        onError?.('ElevenLabs erreur : ' + (err?.detail?.message || res.status))
+        onEnd?.()
         return
       }
-    } catch { /* fall through to browser TTS */ }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudio = audio
+      audio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; onEnd?.() }
+      await audio.play()
+    } catch (e) {
+      onError?.('ElevenLabs inaccessible. Vérifie ta connexion.')
+      onEnd?.()
+    }
+    return
   }
 
-  // Browser TTS (fallback)
+  // Voix navigateur (si pas de ElevenLabs)
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = 'fr-FR'
   utterance.rate = settings.voiceRate ?? 1.05
@@ -92,6 +102,10 @@ export default function Coach() {
     setHasAI(!!(settings.groqKey || settings.openAIKey))
   }, [settings.groqKey, settings.openAIKey])
 
+  const doSpeak = useCallback((text, onEnd) => {
+    speak(text, onEnd, settings, (err) => setError(err))
+  }, [settings])
+
   // Greeting on mount
   useEffect(() => {
     const greeting = hasAI
@@ -99,10 +113,10 @@ export default function Coach() {
       : getCoachMessage(settings.mode, 'idle')
     setCoachText(greeting)
     const t = setTimeout(() => {
-      speak(greeting, () => setStatus(STATUS.IDLE), settings)
+      doSpeak(greeting, () => setStatus(STATUS.IDLE))
       setStatus(STATUS.SPEAKING)
     }, 600)
-    return () => { clearTimeout(t); window.speechSynthesis.cancel() }
+    return () => { clearTimeout(t); stopAll() }
   }, [hasAI])
 
   const sendToCoach = useCallback(async (text) => {
@@ -146,13 +160,13 @@ export default function Coach() {
       setHistory([...newHistory, { role: 'assistant', content: response }])
       setCoachText(response)
       setStatus(STATUS.SPEAKING)
-      speak(response, () => setStatus(STATUS.IDLE), settings)
+      doSpeak(response, () => setStatus(STATUS.IDLE))
     } catch (e) {
       setError("Erreur inattendue. Réessaie.")
       const fallback = buildLocalResponse(text, settings, getContext())
       setCoachText(fallback)
       setStatus(STATUS.SPEAKING)
-      speak(fallback, () => setStatus(STATUS.IDLE), settings)
+      doSpeak(fallback, () => setStatus(STATUS.IDLE))
     }
   }, [settings, todayStats, history])
 
@@ -162,7 +176,7 @@ export default function Coach() {
       setError("Reconnaissance vocale non supportée. Utilise Chrome ou Safari.")
       return
     }
-    window.speechSynthesis.cancel()
+    stopAll()
     setStatus(STATUS.LISTENING)
     setUserText('')
     setError('')
@@ -192,16 +206,16 @@ export default function Coach() {
   const handleMic = () => {
     if (status === STATUS.LISTENING) { recognitionRef.current?.stop(); setStatus(STATUS.IDLE) }
     else if (status === STATUS.IDLE) startListening()
-    else if (status === STATUS.SPEAKING) { window.speechSynthesis.cancel(); setStatus(STATUS.IDLE); setTimeout(startListening, 100) }
+    else if (status === STATUS.SPEAKING) { stopAll(); setStatus(STATUS.IDLE); setTimeout(startListening, 100) }
   }
 
   const handleQuick = (prompt) => {
-    window.speechSynthesis.cancel()
+    stopAll()
     sendToCoach(prompt)
   }
 
   const handleReset = () => {
-    window.speechSynthesis.cancel()
+    stopAll()
     recognitionRef.current?.stop()
     setStatus(STATUS.IDLE)
     setUserText('')
@@ -209,7 +223,7 @@ export default function Coach() {
     setHistory([])
     const greeting = "Conversation réinitialisée. Parle-moi !"
     setCoachText(greeting)
-    setTimeout(() => { speak(greeting, () => setStatus(STATUS.IDLE), settings); setStatus(STATUS.SPEAKING) }, 200)
+    setTimeout(() => { doSpeak(greeting, () => setStatus(STATUS.IDLE)); setStatus(STATUS.SPEAKING) }, 200)
   }
 
   const statusLabel = {
