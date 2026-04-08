@@ -164,12 +164,39 @@ export default function Settings() {
         </Row>
       </Section>
 
-      {/* OpenAI */}
+      {/* IA */}
       <Section title="Intégration IA (optionnel)">
-        <Row
-          label="Clé OpenAI"
-          sub="Optionnel. Active le coach GPT temps réel."
-        >
+        {/* Groq - gratuit */}
+        <Row label="Clé Groq (gratuit)" sub="console.groq.com — discussion libre sur tout sujet">
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={settings.groqKey}
+              onInput={e => updateSettings({ groqKey: e.target.value })}
+              placeholder="gsk_..."
+              className="w-full bg-brutal-700 border border-brutal-600 rounded-xl px-3 py-2.5 pr-10
+                         text-sm text-white placeholder-brutal-400 outline-none
+                         focus:border-indigo-500 transition-colors"
+            />
+            <button
+              onClick={() => setShowKey(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brutal-400"
+            >
+              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {settings.groqKey && (
+            <p className="text-xs text-productive-400 mt-1.5 flex items-center gap-1">
+              <Check size={12} /> Groq connecté — IA gratuite activée
+            </p>
+          )}
+        </div>
+
+        {/* OpenAI - optionnel */}
+        <Row label="Clé OpenAI (optionnel)" sub="Alternative payante — GPT-4o-mini">
           <div />
         </Row>
         <div className="px-4 pb-3">
@@ -183,16 +210,10 @@ export default function Settings() {
                          text-sm text-white placeholder-brutal-400 outline-none
                          focus:border-indigo-500 transition-colors"
             />
-            <button
-              onClick={() => setShowKey(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brutal-400"
-            >
-              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
           </div>
           {settings.openAIKey && (
             <p className="text-xs text-productive-400 mt-1.5 flex items-center gap-1">
-              <Check size={12} /> Clé configurée — coach GPT activé
+              <Check size={12} /> OpenAI configuré
             </p>
           )}
         </div>
