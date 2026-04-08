@@ -55,7 +55,6 @@ export default function History() {
   const { history, todayStats } = useStore()
   const [tab, setTab] = useState(0)
 
-  // Build daily map from history
   const byDate = useMemo(() => {
     const map = {}
     history.forEach(s => {
@@ -64,7 +63,6 @@ export default function History() {
       map[s.date].lost += s.lostTime
       map[s.date].sessions += 1
     })
-    // Add today's live stats
     if (todayStats.date) {
       const d = todayStats.date
       map[d] = {
@@ -78,7 +76,6 @@ export default function History() {
 
   const weekDays = getWeekDays()
   const monthDays = getMonthDays()
-
   const days = tab === 0 ? weekDays : monthDays
   const labels = days.map(d => tab === 0 ? shortDay(d) : shortDate(d))
 
@@ -93,48 +90,31 @@ export default function History() {
   const barData = {
     labels,
     datasets: [
-      {
-        label: 'Productif',
-        data: productiveData,
-        backgroundColor: 'rgba(16,185,129,0.8)',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-      {
-        label: 'Perdu',
-        data: lostData,
-        backgroundColor: 'rgba(239,68,68,0.6)',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
+      { label: 'Productif', data: productiveData, backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 4, borderSkipped: false },
+      { label: 'Perdu', data: lostData, backgroundColor: 'rgba(239,68,68,0.6)', borderRadius: 4, borderSkipped: false },
     ],
   }
 
   const lineData = {
     labels,
-    datasets: [
-      {
-        data: scoreData,
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,0.1)',
-        borderWidth: 2,
-        pointBackgroundColor: '#6366f1',
-        pointRadius: 3,
-        tension: 0.3,
-        fill: true,
-      },
-    ],
+    datasets: [{
+      data: scoreData,
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      borderWidth: 2,
+      pointBackgroundColor: '#6366f1',
+      pointRadius: 3,
+      tension: 0.3,
+      fill: true,
+    }],
   }
 
-  // Summary stats
   const totalProductive = history.reduce((a, s) => a + s.productiveTime, 0) + todayStats.productiveTime
   const totalLost = history.reduce((a, s) => a + s.lostTime, 0) + todayStats.lostTime
   const totalSessions = history.length + todayStats.sessions
   const avgScore = totalSessions > 0
     ? Math.round(scoreData.filter(Boolean).reduce((a, v) => a + v, 0) / (scoreData.filter(Boolean).length || 1))
     : 0
-
-  // Life projection: hours lost per year
   const avgLostPerDay = totalSessions > 0
     ? totalLost / Math.max(1, [...new Set(history.map(s => s.date))].length)
     : 0
@@ -144,37 +124,13 @@ export default function History() {
     <div className="flex flex-col gap-5 px-5 pt-6 pb-28">
       <h2 className="text-xl font-bold text-white">Statistiques</h2>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3">
-        <SummaryCard
-          icon={Clock}
-          label="Temps productif total"
-          value={formatDuration(totalProductive)}
-          color="bg-productive-500/20 text-productive-400"
-        />
-        <SummaryCard
-          icon={Target}
-          label="Score moyen"
-          value={`${avgScore}%`}
-          sub={`${totalSessions} sessions`}
-          color="bg-indigo-500/20 text-indigo-400"
-        />
-        <SummaryCard
-          icon={TrendingUp}
-          label="Total sessions"
-          value={totalSessions}
-          color="bg-brutal-600/50 text-brutal-200"
-        />
-        <SummaryCard
-          icon={AlertTriangle}
-          label="Projection perte/an"
-          value={`${hoursLostYear}h`}
-          sub="heures perdues"
-          color="bg-distraction-500/20 text-distraction-400"
-        />
+        <SummaryCard icon={Clock} label="Temps productif total" value={formatDuration(totalProductive)} color="bg-productive-500/20 text-productive-400" />
+        <SummaryCard icon={Target} label="Score moyen" value={`${avgScore}%`} sub={`${totalSessions} sessions`} color="bg-indigo-500/20 text-indigo-400" />
+        <SummaryCard icon={TrendingUp} label="Total sessions" value={totalSessions} color="bg-brutal-600/50 text-brutal-200" />
+        <SummaryCard icon={AlertTriangle} label="Projection perte/an" value={`${hoursLostYear}h`} sub="heures perdues" color="bg-distraction-500/20 text-distraction-400" />
       </div>
 
-      {/* Tab switcher */}
       <div className="flex bg-brutal-800 p-1 rounded-2xl">
         {TABS.map((t, i) => (
           <button
@@ -188,58 +144,30 @@ export default function History() {
         ))}
       </div>
 
-      {/* Bar chart - productive vs lost */}
       <div className="bg-brutal-800 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-white">Temps (min)</p>
           <div className="flex gap-3 text-xs">
             <span className="flex items-center gap-1.5 text-productive-400">
-              <span className="w-2 h-2 rounded-sm bg-productive-500 inline-block" />
-              Productif
+              <span className="w-2 h-2 rounded-sm bg-productive-500 inline-block" /> Productif
             </span>
             <span className="flex items-center gap-1.5 text-distraction-400">
-              <span className="w-2 h-2 rounded-sm bg-distraction-500 inline-block" />
-              Perdu
+              <span className="w-2 h-2 rounded-sm bg-distraction-500 inline-block" /> Perdu
             </span>
           </div>
         </div>
         <div style={{ height: 160 }}>
-          <Bar
-            data={barData}
-            options={{
-              ...CHART_OPTIONS,
-              scales: {
-                ...CHART_OPTIONS.scales,
-                x: { ...CHART_OPTIONS.scales.x, stacked: false },
-                y: { ...CHART_OPTIONS.scales.y, stacked: false },
-              },
-            }}
-          />
+          <Bar data={barData} options={{ ...CHART_OPTIONS, scales: { ...CHART_OPTIONS.scales, x: { ...CHART_OPTIONS.scales.x, stacked: false }, y: { ...CHART_OPTIONS.scales.y, stacked: false } } }} />
         </div>
       </div>
 
-      {/* Line chart - discipline score */}
       <div className="bg-brutal-800 rounded-2xl p-4">
         <p className="text-sm font-semibold text-white mb-4">Score de discipline (%)</p>
         <div style={{ height: 140 }}>
-          <Line
-            data={lineData}
-            options={{
-              ...CHART_OPTIONS,
-              scales: {
-                ...CHART_OPTIONS.scales,
-                y: {
-                  ...CHART_OPTIONS.scales.y,
-                  min: 0,
-                  max: 100,
-                },
-              },
-            }}
-          />
+          <Line data={lineData} options={{ ...CHART_OPTIONS, scales: { ...CHART_OPTIONS.scales, y: { ...CHART_OPTIONS.scales.y, min: 0, max: 100 } } }} />
         </div>
       </div>
 
-      {/* Session list */}
       {history.length > 0 && (
         <div className="bg-brutal-800 rounded-2xl p-4">
           <p className="text-sm font-semibold text-white mb-3">Sessions récentes</p>
