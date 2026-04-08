@@ -263,7 +263,7 @@ export default function Settings() {
         </div>
 
         {/* Speed */}
-        <Row label="Vitesse" sub={`${settings.voiceRate.toFixed(1)}x`}>
+        <Row label="Vitesse" sub={`${(settings.voiceRate ?? 1.05).toFixed(1)}x`}>
           <div />
         </Row>
         <div className="px-4 pb-3">
@@ -279,7 +279,7 @@ export default function Settings() {
         </div>
 
         {/* Pitch */}
-        <Row label="Tonalité" sub={`${settings.voicePitch.toFixed(1)}`}>
+        <Row label="Tonalité" sub={`${(settings.voicePitch ?? 0.95).toFixed(1)}`}>
           <div />
         </Row>
         <div className="px-4 pb-3">
