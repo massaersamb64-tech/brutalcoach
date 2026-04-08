@@ -127,28 +127,25 @@ ${context.score > 0 ? `Contexte utilisateur : score de discipline ${context.scor
 
 export async function getGroqMessage(groqKey, history, settings, context) {
   if (!groqKey) return null
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${groqKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT(settings, context) },
-          ...history.slice(-10),
-        ],
-        max_tokens: 150,
-        temperature: 0.8,
-      }),
-    })
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content?.trim() || null
-  } catch {
-    return null
-  }
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${groqKey}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT(settings, context) },
+        ...history.slice(-10),
+      ],
+      max_tokens: 150,
+      temperature: 0.8,
+    }),
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error.message)
+  return data.choices?.[0]?.message?.content?.trim() || null
 }
 
 export async function getOpenAIMessage(apiKey, history, settings, context) {

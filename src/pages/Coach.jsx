@@ -79,24 +79,40 @@ export default function Coach() {
 
     try {
       let response = null
+      let apiError = null
 
       if (settings.groqKey) {
-        response = await getGroqMessage(settings.groqKey, newHistory, settings, getContext())
+        try {
+          response = await getGroqMessage(settings.groqKey, newHistory, settings, getContext())
+          if (!response) apiError = "Groq n'a pas répondu. Vérifie ta clé dans Config."
+        } catch (e) {
+          apiError = "Erreur Groq : " + (e?.message || "connexion impossible")
+        }
       } else if (settings.openAIKey) {
-        response = await getOpenAIMessage(settings.openAIKey, newHistory, settings, getContext())
+        try {
+          response = await getOpenAIMessage(settings.openAIKey, newHistory, settings, getContext())
+          if (!response) apiError = "OpenAI n'a pas répondu. Vérifie ta clé dans Config."
+        } catch (e) {
+          apiError = "Erreur OpenAI : " + (e?.message || "connexion impossible")
+        }
+      } else {
+        apiError = "Aucune IA connectée — réponses basiques. Ajoute une clé Groq dans Config."
+      }
+
+      if (apiError && !response) {
+        setError(apiError)
       }
 
       if (!response) {
         response = buildLocalResponse(text, settings, getContext())
       }
 
-      // Save conversation history
       setHistory([...newHistory, { role: 'assistant', content: response }])
-
       setCoachText(response)
       setStatus(STATUS.SPEAKING)
       speak(response, () => setStatus(STATUS.IDLE), settings)
-    } catch {
+    } catch (e) {
+      setError("Erreur inattendue. Réessaie.")
       const fallback = buildLocalResponse(text, settings, getContext())
       setCoachText(fallback)
       setStatus(STATUS.SPEAKING)
