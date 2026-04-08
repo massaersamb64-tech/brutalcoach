@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@theme {
+  /* Brutal dark palette */
+  --color-brutal-900: #0f0f0f;
+  --color-brutal-800: #1a1a1a;
+  --color-brutal-700: #252525;
+  --color-brutal-600: #333333;
+  --color-brutal-500: #404040;
+  --color-brutal-400: #525252;
+  --color-brutal-300: #666666;
+  --color-brutal-200: #808080;
+  --color-brutal-100: #999999;
+
+  /* Status colors */
+  --color-productive-500: #10b981;
+  --color-productive-400: #34d399;
+  --color-distraction-500: #ef4444;
+  --color-distraction-400: #f87171;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    background: #0f0f0f;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: #0f0f0f;
+    color: #f9fafb;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  #app {
+    width: 100%;
+    min-height: 100svh;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .animate-fade {
+    animation: fadeIn 0.3s ease;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
