@@ -18,11 +18,20 @@ const STATUS = {
   SPEAKING: 'speaking',
 }
 
-let currentAudio = null
+let currentSource = null
+let audioCtx = null
+
+// Doit être appelé dans un handler de tap (iOS exige un geste utilisateur)
+function unlockAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume()
+}
 
 function stopAll() {
   window.speechSynthesis.cancel()
-  if (currentAudio) { currentAudio.pause(); currentAudio = null }
+  if (currentSource) { try { currentSource.stop() } catch {} currentSource = null }
 }
 
 async function speak(text, onEnd, settings = {}, onError) {
@@ -52,14 +61,20 @@ async function speak(text, onEnd, settings = {}, onError) {
         onEnd?.()
         return
       }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      currentAudio = audio
-      audio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; onEnd?.() }
-      await audio.play()
+      const arrayBuffer = await res.arrayBuffer()
+
+      // AudioContext contourne le blocage autoplay iOS
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+      await audioCtx.resume()
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+      const source = audioCtx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioCtx.destination)
+      source.onended = () => { currentSource = null; onEnd?.() }
+      source.start(0)
+      currentSource = source
     } catch (e) {
-      onError?.('ElevenLabs inaccessible. Vérifie ta connexion.')
+      onError?.('ElevenLabs inaccessible : ' + (e?.message || 'erreur réseau'))
       onEnd?.()
     }
     return
@@ -204,12 +219,14 @@ export default function Coach() {
   }, [sendToCoach, status])
 
   const handleMic = () => {
+    unlockAudio() // déverrouille l'audio iOS au moment du tap
     if (status === STATUS.LISTENING) { recognitionRef.current?.stop(); setStatus(STATUS.IDLE) }
     else if (status === STATUS.IDLE) startListening()
     else if (status === STATUS.SPEAKING) { stopAll(); setStatus(STATUS.IDLE); setTimeout(startListening, 100) }
   }
 
   const handleQuick = (prompt) => {
+    unlockAudio()
     stopAll()
     sendToCoach(prompt)
   }
