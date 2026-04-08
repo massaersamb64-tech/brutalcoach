@@ -38,7 +38,7 @@ export default function Dashboard() {
   useEffect(() => { refreshDashboardMsg('check') }, [])
 
   return (
-    <div className="h-dvh overflow-hidden flex flex-col px-4 pt-5 pb-16 gap-3">
+    <div className="h-dvh overflow-hidden flex flex-col px-4 pt-5 pb-24 gap-3">
 
       {/* Header */}
       <div className="flex items-center justify-between">

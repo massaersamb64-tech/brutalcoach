@@ -94,7 +94,7 @@ export default function Session() {
   const goalProgress = Math.min(100, Math.round((productiveSec / goalSec) * 100))
 
   return (
-    <div className="h-dvh overflow-hidden flex flex-col px-5 pt-5 pb-16">
+    <div className="h-dvh overflow-hidden flex flex-col px-5 pt-5 pb-24">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
