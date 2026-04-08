@@ -119,14 +119,40 @@ function getRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+const SYSTEM_PROMPT = (settings, context) => `Tu es un assistant IA intelligent et polyvalent. Tu parles TOUJOURS en français.
+Tu peux discuter de n'importe quel sujet : actualité, sciences, culture, sport, histoire, technologie, cuisine, voyage, etc.
+Tu es aussi expert en productivité et développement personnel.
+Tes réponses sont courtes (2-3 phrases max) car l'utilisateur t'écoute à voix haute.
+${context.score > 0 ? `Contexte utilisateur : score de discipline ${context.score}%, ${context.productiveTime} minutes productives aujourd'hui.` : ''}`
+
+export async function getGroqMessage(groqKey, history, settings, context) {
+  if (!groqKey) return null
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT(settings, context) },
+          ...history.slice(-10),
+        ],
+        max_tokens: 150,
+        temperature: 0.8,
+      }),
+    })
+    const data = await res.json()
+    return data.choices?.[0]?.message?.content?.trim() || null
+  } catch {
+    return null
+  }
+}
+
 export async function getOpenAIMessage(apiKey, history, settings, context) {
   if (!apiKey) return null
-
-  const systemPrompt = `Tu es BrutalCoach, un coach de productivité ${settings.mode === 'brutal' ? 'direct, sans pitié et provocateur' : 'encourageant et bienveillant'}.
-Réponds TOUJOURS en français. Sois très court (max 2 phrases percutantes).
-Contexte actuel : Score discipline = ${context.score}%, Temps productif = ${context.productiveTime}min, Mode = ${settings.mode === 'brutal' ? 'Brutal' : 'Encouragement'}.
-${settings.mode === 'brutal' ? 'Sois direct, provocateur, sans filtre. Pas de compliments inutiles.' : 'Sois chaleureux, motivant, positif.'}`
-
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -137,11 +163,11 @@ ${settings.mode === 'brutal' ? 'Sois direct, provocateur, sans filtre. Pas de co
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: systemPrompt },
-          ...history.slice(-6),
+          { role: 'system', content: SYSTEM_PROMPT(settings, context) },
+          ...history.slice(-10),
         ],
-        max_tokens: 120,
-        temperature: 0.9,
+        max_tokens: 150,
+        temperature: 0.8,
       }),
     })
     const data = await res.json()

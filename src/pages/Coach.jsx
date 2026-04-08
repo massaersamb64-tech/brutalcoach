@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'preact/hooks'
-import { Mic, MicOff, Bot, RefreshCw, Volume2 } from 'lucide-react'
+import { Mic, MicOff, Bot, RefreshCw, Volume2, Settings } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store/StoreContext'
-import { getCoachMessage, getOpenAIMessage } from '../utils/coachAI'
+import { getCoachMessage, getGroqMessage, getOpenAIMessage } from '../utils/coachAI'
 
 const QUICK_PROMPTS = [
-  "Plan pour aujourd'hui",
-  "Mini-défi du jour",
+  "Donne-moi un défi",
   "Analyse mon score",
-  "Comment m'améliorer ?",
+  "Plan pour aujourd'hui",
+  "Dis-moi quelque chose d'intéressant",
 ]
 
 const STATUS = {
@@ -23,7 +24,6 @@ function speak(text, onEnd) {
   utterance.lang = 'fr-FR'
   utterance.rate = 1.05
   utterance.pitch = 0.95
-  // Try to find a French voice
   const voices = window.speechSynthesis.getVoices()
   const frVoice = voices.find(v => v.lang.startsWith('fr'))
   if (frVoice) utterance.voice = frVoice
@@ -37,6 +37,8 @@ export default function Coach() {
   const [coachText, setCoachText] = useState('')
   const [userText, setUserText] = useState('')
   const [error, setError] = useState('')
+  const [hasAI, setHasAI] = useState(false)
+  const [history, setHistory] = useState([]) // conversation history for AI
   const recognitionRef = useRef(null)
 
   const getContext = () => ({
@@ -45,20 +47,22 @@ export default function Coach() {
     sessions: todayStats.sessions,
   })
 
+  useEffect(() => {
+    setHasAI(!!(settings.groqKey || settings.openAIKey))
+  }, [settings.groqKey, settings.openAIKey])
+
   // Greeting on mount
   useEffect(() => {
-    const greeting = getCoachMessage(settings.mode, 'idle')
+    const greeting = hasAI
+      ? "Bonjour ! Je suis prêt à discuter de tout sujet avec toi. Appuie sur le bouton et parle-moi."
+      : getCoachMessage(settings.mode, 'idle')
     setCoachText(greeting)
-    // Wait a moment before speaking
     const t = setTimeout(() => {
       speak(greeting, () => setStatus(STATUS.IDLE))
       setStatus(STATUS.SPEAKING)
     }, 600)
-    return () => {
-      clearTimeout(t)
-      window.speechSynthesis.cancel()
-    }
-  }, [])
+    return () => { clearTimeout(t); window.speechSynthesis.cancel() }
+  }, [hasAI])
 
   const sendToCoach = useCallback(async (text) => {
     if (!text.trim()) return
@@ -66,21 +70,23 @@ export default function Coach() {
     setStatus(STATUS.THINKING)
     setCoachText('...')
 
+    const newHistory = [...history, { role: 'user', content: text }]
+
     try {
       let response = null
 
-      if (settings.openAIKey) {
-        response = await getOpenAIMessage(
-          settings.openAIKey,
-          [{ role: 'user', content: text }],
-          settings,
-          getContext()
-        )
+      if (settings.groqKey) {
+        response = await getGroqMessage(settings.groqKey, newHistory, settings, getContext())
+      } else if (settings.openAIKey) {
+        response = await getOpenAIMessage(settings.openAIKey, newHistory, settings, getContext())
       }
 
       if (!response) {
         response = buildLocalResponse(text, settings, getContext())
       }
+
+      // Save conversation history
+      setHistory([...newHistory, { role: 'assistant', content: response }])
 
       setCoachText(response)
       setStatus(STATUS.SPEAKING)
@@ -91,37 +97,33 @@ export default function Coach() {
       setStatus(STATUS.SPEAKING)
       speak(fallback, () => setStatus(STATUS.IDLE))
     }
-  }, [settings, todayStats])
+  }, [settings, todayStats, history])
 
   const startListening = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      setError("La reconnaissance vocale n'est pas supportée sur ce navigateur.")
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) {
+      setError("Reconnaissance vocale non supportée. Utilise Chrome ou Safari.")
       return
     }
-
     window.speechSynthesis.cancel()
     setStatus(STATUS.LISTENING)
     setUserText('')
     setError('')
 
-    const recognition = new SpeechRecognition()
+    const recognition = new SR()
     recognition.lang = 'fr-FR'
     recognition.interimResults = false
     recognition.maxAlternatives = 1
 
     recognition.onresult = (e) => {
-      const transcript = e.results[0][0].transcript
-      sendToCoach(transcript)
+      sendToCoach(e.results[0][0].transcript)
     }
-
     recognition.onerror = (e) => {
       setStatus(STATUS.IDLE)
       if (e.error === 'no-speech') setError('Aucune parole détectée. Réessaie.')
-      else if (e.error === 'not-allowed') setError('Microphone refusé. Autorise-le dans les paramètres.')
+      else if (e.error === 'not-allowed') setError('Micro refusé. Autorise-le dans les paramètres du navigateur.')
       else setError('Erreur micro. Réessaie.')
     }
-
     recognition.onend = () => {
       if (status === STATUS.LISTENING) setStatus(STATUS.IDLE)
     }
@@ -130,19 +132,10 @@ export default function Coach() {
     recognition.start()
   }, [sendToCoach, status])
 
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop()
-    setStatus(STATUS.IDLE)
-  }, [])
-
   const handleMic = () => {
-    if (status === STATUS.LISTENING) stopListening()
+    if (status === STATUS.LISTENING) { recognitionRef.current?.stop(); setStatus(STATUS.IDLE) }
     else if (status === STATUS.IDLE) startListening()
-    else if (status === STATUS.SPEAKING) {
-      window.speechSynthesis.cancel()
-      setStatus(STATUS.IDLE)
-      startListening()
-    }
+    else if (status === STATUS.SPEAKING) { window.speechSynthesis.cancel(); setStatus(STATUS.IDLE); setTimeout(startListening, 100) }
   }
 
   const handleQuick = (prompt) => {
@@ -156,22 +149,19 @@ export default function Coach() {
     setStatus(STATUS.IDLE)
     setUserText('')
     setError('')
-    const greeting = getCoachMessage(settings.mode, 'idle')
+    setHistory([])
+    const greeting = "Conversation réinitialisée. Parle-moi !"
     setCoachText(greeting)
-    setTimeout(() => {
-      speak(greeting, () => setStatus(STATUS.IDLE))
-      setStatus(STATUS.SPEAKING)
-    }, 200)
+    setTimeout(() => { speak(greeting, () => setStatus(STATUS.IDLE)); setStatus(STATUS.SPEAKING) }, 200)
   }
 
   const statusLabel = {
-    [STATUS.IDLE]: 'Appuie pour parler',
+    [STATUS.IDLE]: hasAI ? 'Appuie pour parler de tout' : 'Appuie pour parler',
     [STATUS.LISTENING]: 'Écoute...',
-    [STATUS.THINKING]: 'Le coach réfléchit...',
-    [STATUS.SPEAKING]: 'Le coach parle...',
+    [STATUS.THINKING]: 'Réflexion...',
+    [STATUS.SPEAKING]: 'Parle... (appuie pour interrompre)',
   }[status]
 
-  const micActive = status === STATUS.LISTENING
   const micPulse = status === STATUS.LISTENING || status === STATUS.SPEAKING
 
   return (
@@ -182,29 +172,33 @@ export default function Coach() {
         <div>
           <h2 className="text-xl font-bold text-white">Coach IA</h2>
           <p className="text-xs text-brutal-400 mt-0.5">
-            Mode : <span className={settings.mode === 'brutal' ? 'text-distraction-400' : 'text-productive-400'}>
-              {settings.mode === 'brutal' ? 'Brutal' : 'Encouragement'}
-            </span>
-            {' · '}{todayStats.score}%
+            {hasAI
+              ? <span className="text-productive-400">IA connectée — discussion libre</span>
+              : <span className="text-yellow-400">Mode basique — <Link to="/settings" className="underline">connecte une IA</Link></span>
+            }
           </p>
         </div>
-        <button
-          onClick={handleReset}
-          className="w-9 h-9 bg-brutal-800 rounded-xl flex items-center justify-center active:opacity-70"
-        >
-          <RefreshCw size={15} className="text-brutal-300" />
-        </button>
+        <div className="flex gap-2">
+          <Link to="/settings"
+            className="w-9 h-9 bg-brutal-800 rounded-xl flex items-center justify-center active:opacity-70">
+            <Settings size={15} className="text-brutal-300" />
+          </Link>
+          <button onClick={handleReset}
+            className="w-9 h-9 bg-brutal-800 rounded-xl flex items-center justify-center active:opacity-70">
+            <RefreshCw size={15} className="text-brutal-300" />
+          </button>
+        </div>
       </div>
 
-      {/* Coach response area */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+      {/* Coach area */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5">
 
-        {/* Coach avatar with pulse */}
+        {/* Avatar */}
         <div className="relative">
           {micPulse && (
-            <div className={`absolute inset-0 rounded-full animate-ping opacity-20
+            <div className={`absolute rounded-full animate-ping opacity-20
               ${status === STATUS.LISTENING ? 'bg-productive-500' : 'bg-indigo-500'}`}
-              style={{ transform: 'scale(1.4)' }}
+              style={{ inset: '-12px' }}
             />
           )}
           <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-colors duration-300
@@ -215,61 +209,55 @@ export default function Coach() {
           >
             {status === STATUS.SPEAKING
               ? <Volume2 size={32} className="text-indigo-400" />
-              : <Bot size={32} className="text-brutal-300" />
-            }
+              : <Bot size={32} className="text-brutal-300" />}
           </div>
         </div>
 
-        {/* Coach text */}
-        <div className="w-full bg-brutal-800 rounded-2xl px-5 py-4 min-h-[80px] flex items-center justify-center">
+        {/* Coach response */}
+        <div className="w-full bg-brutal-800 rounded-2xl px-5 py-4 min-h-[90px] flex items-center justify-center">
           <p className={`text-base text-white text-center leading-relaxed
-            ${status === STATUS.THINKING ? 'text-brutal-400' : ''}`}>
+            ${status === STATUS.THINKING ? 'text-brutal-400 animate-pulse' : ''}`}>
             {coachText || '...'}
           </p>
         </div>
 
-        {/* User text (what was heard) */}
-        {userText ? (
-          <p className="text-xs text-brutal-400 text-center italic">"{userText}"</p>
-        ) : null}
+        {/* What user said */}
+        {userText ? <p className="text-xs text-brutal-400 text-center italic px-4">"{userText}"</p> : null}
+        {error ? <p className="text-xs text-distraction-400 text-center">{error}</p> : null}
 
-        {/* Error */}
-        {error ? (
-          <p className="text-xs text-distraction-400 text-center">{error}</p>
-        ) : null}
-
-        {/* Status label */}
-        <p className="text-xs text-brutal-400">{statusLabel}</p>
+        <p className="text-xs text-brutal-500">{statusLabel}</p>
       </div>
+
+      {/* No AI banner */}
+      {!hasAI && (
+        <div className="bg-brutal-800 border border-brutal-600 rounded-xl px-4 py-3 mb-3">
+          <p className="text-xs text-brutal-300 text-center">
+            Pour discuter de <span className="text-white font-medium">n'importe quel sujet</span>, ajoute une clé Groq gratuite dans{' '}
+            <Link to="/settings" className="text-indigo-400 underline">Paramètres</Link>
+          </p>
+        </div>
+      )}
 
       {/* Quick prompts */}
       <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
         {QUICK_PROMPTS.map(p => (
-          <button
-            key={p}
-            onClick={() => handleQuick(p)}
-            disabled={status === STATUS.THINKING}
+          <button key={p} onClick={() => handleQuick(p)} disabled={status === STATUS.THINKING}
             className="flex-shrink-0 bg-brutal-800 border border-brutal-600 text-brutal-200
-                       text-xs px-3 py-2 rounded-full whitespace-nowrap
-                       active:opacity-70 disabled:opacity-40"
-          >
+                       text-xs px-3 py-2 rounded-full whitespace-nowrap active:opacity-70 disabled:opacity-40">
             {p}
           </button>
         ))}
       </div>
 
       {/* Mic button */}
-      <button
-        onClick={handleMic}
-        disabled={status === STATUS.THINKING}
+      <button onClick={handleMic} disabled={status === STATUS.THINKING}
         className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-3
                    transition-all active:scale-[0.98] disabled:opacity-40
-          ${micActive
-            ? 'bg-distraction-500 text-white'
-            : 'bg-white text-brutal-900'}`}
+          ${status === STATUS.LISTENING ? 'bg-distraction-500 text-white' : 'bg-white text-brutal-900'}`}
       >
-        {micActive ? <MicOff size={22} /> : <Mic size={22} />}
-        {micActive ? 'Arrêter' : status === STATUS.SPEAKING ? 'Interrompre & Parler' : 'Parler au coach'}
+        {status === STATUS.LISTENING ? <MicOff size={22} /> : <Mic size={22} />}
+        {status === STATUS.LISTENING ? 'Arrêter' :
+         status === STATUS.SPEAKING ? 'Interrompre & Parler' : 'Parler'}
       </button>
 
     </div>
@@ -279,41 +267,23 @@ export default function Coach() {
 function buildLocalResponse(text, settings, ctx) {
   const t = text.toLowerCase()
   const mode = settings.mode
-
   if (t.includes('plan') || t.includes('aujourd')) {
     return mode === 'brutal'
-      ? `Voici ton plan : ${settings.sessionGoalMinutes} minutes de travail, 10 minutes de pause, répète. Aucune excuse. Objectif : ${settings.dailyGoalHours} heures productives. Maintenant exécute.`
-      : `Voici ton plan idéal : blocs de ${settings.sessionGoalMinutes} minutes avec des pauses de 10 minutes. Objectif : ${settings.dailyGoalHours} heures productives. Tu peux le faire !`
+      ? `Voici ton plan : ${settings.sessionGoalMinutes} minutes de travail, 10 minutes de pause, répète. Objectif : ${settings.dailyGoalHours} heures productives.`
+      : `Plan idéal : blocs de ${settings.sessionGoalMinutes} minutes avec des pauses de 10 minutes. Objectif : ${settings.dailyGoalHours} heures productives.`
   }
-
   if (t.includes('défi') || t.includes('challenge')) {
-    const defis = [
-      'Travaille 45 minutes sans aucune interruption. Téléphone en mode avion.',
-      'Termine une tâche que tu repousses depuis 3 jours.',
-      'Fais une session de travail profond : 90 minutes, aucune notification.',
-      'Identifie ta tâche la plus importante et commence par elle.',
-    ]
+    const defis = ['Travaille 45 minutes sans interruption, téléphone en mode avion.', 'Termine une tâche que tu repousses depuis 3 jours.', 'Une session de 90 minutes, zéro notification.']
     return defis[Math.floor(Math.random() * defis.length)]
   }
-
-  if (t.includes('améliorer') || t.includes('discipline') || t.includes('conseil')) {
-    return mode === 'brutal'
-      ? `Stop aux excuses. Applique ça : téléphone en mode avion, un seul objectif à la fois, timer de ${settings.sessionGoalMinutes} minutes, aucune dérogation. La discipline ça se construit par la répétition, pas par la motivation.`
-      : `Pour améliorer ta discipline : commence par de petites sessions de 30 minutes, élimine les distractions visibles, et célèbre chaque session complétée. La régularité prime sur l'intensité !`
-  }
-
-  if (t.includes('score') || t.includes('analyse') || t.includes('performance')) {
+  if (t.includes('score') || t.includes('analyse')) {
     const s = ctx.score
-    const time = ctx.productiveTime
-    if (s === 0) return mode === 'brutal' ? "Score nul. Tu n'as pas encore commencé. Lance une session." : "Tu n'as pas encore commencé aujourd'hui. Lance ta première session !"
-    if (s >= 80) return mode === 'brutal' ? `${s} pourcent, c'est bien. Mais peut-on viser 90 ? ${time} minutes de productivité, continue.` : `${s} pourcent ! C'est excellent ! Tu as été productif pendant ${time} minutes. Continue sur cette lancée !`
-    if (s >= 50) return mode === 'brutal' ? `${s} pourcent c'est insuffisant. Tu peux faire mieux. Concentre-toi.` : `${s} pourcent c'est un bon début ! Avec un peu plus de focus, tu peux atteindre 80. Tu y es presque !`
-    return mode === 'brutal' ? `${s} pourcent c'est faible. Reprends-toi immédiatement.` : `${s} pourcent, ne te décourage pas ! Chaque session est une opportunité de s'améliorer.`
+    if (s === 0) return "Tu n'as pas encore commencé aujourd'hui. Lance une session !"
+    if (s >= 80) return `${s}% de discipline, excellent ! ${ctx.productiveTime} minutes productives.`
+    return `${s}% pour l'instant. Tu peux faire mieux, continue !`
   }
-
   const defaults = mode === 'brutal'
-    ? ["Travaille. C'est tout ce que j'ai à te dire.", "Arrête de parler, commence à agir.", "La question n'est pas comment, c'est quand. La réponse : maintenant."]
-    : ["Je suis là pour t'aider ! Pose-moi tes questions sur la productivité.", "Continue à travailler, tu fais du bon boulot !", "Chaque effort compte. Tu avances !"]
-
+    ? ["Arrête de parler, commence à agir.", "La question n'est pas comment, c'est quand. La réponse : maintenant."]
+    : ["Je suis là pour t'aider ! Pour discuter librement, ajoute une clé Groq dans les paramètres.", "Chaque effort compte. Tu avances !"]
   return defaults[Math.floor(Math.random() * defaults.length)]
 }

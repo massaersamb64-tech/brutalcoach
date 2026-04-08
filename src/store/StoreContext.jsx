@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   mode: 'brutal',
   category: 'Études',
   openAIKey: '',
+  groqKey: '',
   notifications: true,
 }
 
