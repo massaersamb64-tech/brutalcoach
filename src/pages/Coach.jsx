@@ -18,15 +18,20 @@ const STATUS = {
   SPEAKING: 'speaking',
 }
 
-function speak(text, onEnd) {
+function speak(text, onEnd, settings = {}) {
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = 'fr-FR'
-  utterance.rate = 1.05
-  utterance.pitch = 0.95
+  utterance.rate = settings.voiceRate ?? 1.05
+  utterance.pitch = settings.voicePitch ?? 0.95
   const voices = window.speechSynthesis.getVoices()
-  const frVoice = voices.find(v => v.lang.startsWith('fr'))
-  if (frVoice) utterance.voice = frVoice
+  if (settings.voiceName) {
+    const chosen = voices.find(v => v.name === settings.voiceName)
+    if (chosen) utterance.voice = chosen
+  } else {
+    const frVoice = voices.find(v => v.lang.startsWith('fr'))
+    if (frVoice) utterance.voice = frVoice
+  }
   utterance.onend = onEnd || null
   window.speechSynthesis.speak(utterance)
 }
@@ -58,7 +63,7 @@ export default function Coach() {
       : getCoachMessage(settings.mode, 'idle')
     setCoachText(greeting)
     const t = setTimeout(() => {
-      speak(greeting, () => setStatus(STATUS.IDLE))
+      speak(greeting, () => setStatus(STATUS.IDLE), settings)
       setStatus(STATUS.SPEAKING)
     }, 600)
     return () => { clearTimeout(t); window.speechSynthesis.cancel() }
@@ -90,12 +95,12 @@ export default function Coach() {
 
       setCoachText(response)
       setStatus(STATUS.SPEAKING)
-      speak(response, () => setStatus(STATUS.IDLE))
+      speak(response, () => setStatus(STATUS.IDLE), settings)
     } catch {
       const fallback = buildLocalResponse(text, settings, getContext())
       setCoachText(fallback)
       setStatus(STATUS.SPEAKING)
-      speak(fallback, () => setStatus(STATUS.IDLE))
+      speak(fallback, () => setStatus(STATUS.IDLE), settings)
     }
   }, [settings, todayStats, history])
 
@@ -152,7 +157,7 @@ export default function Coach() {
     setHistory([])
     const greeting = "Conversation réinitialisée. Parle-moi !"
     setCoachText(greeting)
-    setTimeout(() => { speak(greeting, () => setStatus(STATUS.IDLE)); setStatus(STATUS.SPEAKING) }, 200)
+    setTimeout(() => { speak(greeting, () => setStatus(STATUS.IDLE), settings); setStatus(STATUS.SPEAKING) }, 200)
   }
 
   const statusLabel = {

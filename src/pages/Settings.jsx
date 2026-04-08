@@ -1,5 +1,5 @@
-import { useState } from 'preact/hooks'
-import { Eye, EyeOff, Check, Trash2, Zap, Heart } from 'lucide-react'
+import { useState, useEffect } from 'preact/hooks'
+import { Eye, EyeOff, Check, Trash2, Zap, Heart, Play } from 'lucide-react'
 import { useStore } from '../store/StoreContext'
 
 const CATEGORIES = ['Études', 'Sport', 'Projets', 'Lecture', 'Autre']
@@ -63,6 +63,29 @@ export default function Settings() {
   const { settings, updateSettings } = useStore()
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [voices, setVoices] = useState([])
+
+  useEffect(() => {
+    const load = () => setVoices(window.speechSynthesis.getVoices())
+    load()
+    window.speechSynthesis.onvoiceschanged = load
+  }, [])
+
+  const testVoice = () => {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance("Bonjour, je suis ton coach IA !")
+    u.lang = 'fr-FR'
+    u.rate = settings.voiceRate
+    u.pitch = settings.voicePitch
+    if (settings.voiceName) {
+      const v = voices.find(v => v.name === settings.voiceName)
+      if (v) u.voice = v
+    } else {
+      const fr = voices.find(v => v.lang.startsWith('fr'))
+      if (fr) u.voice = fr
+    }
+    window.speechSynthesis.speak(u)
+  }
 
   const handleSave = () => {
     setSaved(true)
@@ -216,6 +239,72 @@ export default function Settings() {
               <Check size={12} /> OpenAI configuré
             </p>
           )}
+        </div>
+      </Section>
+
+      {/* Voix */}
+      <Section title="Voix du Coach">
+        {/* Voice selector */}
+        <Row label="Voix" sub="Voix disponibles sur cet appareil">
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <select
+            value={settings.voiceName}
+            onChange={e => updateSettings({ voiceName: e.target.value })}
+            className="w-full bg-brutal-700 border border-brutal-600 rounded-xl px-3 py-2.5
+                       text-sm text-white outline-none focus:border-indigo-500 transition-colors"
+          >
+            <option value="">Voix française par défaut</option>
+            {voices.map(v => (
+              <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Speed */}
+        <Row label="Vitesse" sub={`${settings.voiceRate.toFixed(1)}x`}>
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <input
+            type="range" min="0.5" max="2.0" step="0.1"
+            value={settings.voiceRate}
+            onInput={e => updateSettings({ voiceRate: parseFloat(e.target.value) })}
+            className="w-full accent-indigo-500"
+          />
+          <div className="flex justify-between text-xs text-brutal-400 mt-1">
+            <span>Lent</span><span>Normal</span><span>Rapide</span>
+          </div>
+        </div>
+
+        {/* Pitch */}
+        <Row label="Tonalité" sub={`${settings.voicePitch.toFixed(1)}`}>
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <input
+            type="range" min="0.5" max="2.0" step="0.1"
+            value={settings.voicePitch}
+            onInput={e => updateSettings({ voicePitch: parseFloat(e.target.value) })}
+            className="w-full accent-indigo-500"
+          />
+          <div className="flex justify-between text-xs text-brutal-400 mt-1">
+            <span>Grave</span><span>Normal</span><span>Aigu</span>
+          </div>
+        </div>
+
+        {/* Test */}
+        <div className="px-4 pb-4">
+          <button
+            onClick={testVoice}
+            className="w-full bg-indigo-600/20 border border-indigo-600/40 text-indigo-400
+                       rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2
+                       active:opacity-70"
+          >
+            <Play size={14} fill="currentColor" />
+            Tester la voix
+          </button>
         </div>
       </Section>
 

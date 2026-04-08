@@ -13,6 +13,9 @@ const DEFAULT_SETTINGS = {
   openAIKey: '',
   groqKey: '',
   notifications: true,
+  voiceName: '',
+  voiceRate: 1.05,
+  voicePitch: 0.95,
 }
 
 const DEFAULT_TODAY = {
