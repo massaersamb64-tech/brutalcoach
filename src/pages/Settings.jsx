@@ -242,6 +242,49 @@ export default function Settings() {
         </div>
       </Section>
 
+      {/* ElevenLabs */}
+      <Section title="Voix personnalisée (ElevenLabs)">
+        <Row label="Clé API ElevenLabs" sub="elevenlabs.io → Profile → API Key">
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={settings.elevenLabsKey}
+              onInput={e => updateSettings({ elevenLabsKey: e.target.value })}
+              placeholder="sk_..."
+              className="w-full bg-brutal-700 border border-brutal-600 rounded-xl px-3 py-2.5 pr-10
+                         text-sm text-white placeholder-brutal-400 outline-none
+                         focus:border-indigo-500 transition-colors"
+            />
+            <button onClick={() => setShowKey(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brutal-400">
+              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <Row label="Voice ID" sub="ElevenLabs → Voices → clique sur ta voix → ID">
+          <div />
+        </Row>
+        <div className="px-4 pb-3">
+          <input
+            type="text"
+            value={settings.elevenLabsVoiceId}
+            onInput={e => updateSettings({ elevenLabsVoiceId: e.target.value })}
+            placeholder="abc123..."
+            className="w-full bg-brutal-700 border border-brutal-600 rounded-xl px-3 py-2.5
+                       text-sm text-white placeholder-brutal-400 outline-none
+                       focus:border-indigo-500 transition-colors"
+          />
+          {settings.elevenLabsKey && settings.elevenLabsVoiceId && (
+            <p className="text-xs text-productive-400 mt-1.5 flex items-center gap-1">
+              <Check size={12} /> Voix ElevenLabs active — ta voix personnalisée
+            </p>
+          )}
+        </div>
+      </Section>
+
       {/* Voix */}
       <Section title="Voix du Coach">
         {/* Voice selector */}

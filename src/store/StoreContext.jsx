@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS = {
   voiceName: '',
   voiceRate: 1.05,
   voicePitch: 0.95,
+  elevenLabsKey: '',
+  elevenLabsVoiceId: '',
 }
 
 const DEFAULT_TODAY = {

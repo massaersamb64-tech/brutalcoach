@@ -18,8 +18,44 @@ const STATUS = {
   SPEAKING: 'speaking',
 }
 
-function speak(text, onEnd, settings = {}) {
+let currentAudio = null
+
+async function speak(text, onEnd, settings = {}) {
+  // Stop any current speech
   window.speechSynthesis.cancel()
+  if (currentAudio) { currentAudio.pause(); currentAudio = null }
+
+  // ElevenLabs (custom voice)
+  if (settings.elevenLabsKey && settings.elevenLabsVoiceId) {
+    try {
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${settings.elevenLabsVoiceId}`,
+        {
+          method: 'POST',
+          headers: {
+            'xi-api-key': settings.elevenLabsKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          }),
+        }
+      )
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        currentAudio = audio
+        audio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; onEnd?.() }
+        audio.play()
+        return
+      }
+    } catch { /* fall through to browser TTS */ }
+  }
+
+  // Browser TTS (fallback)
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = 'fr-FR'
   utterance.rate = settings.voiceRate ?? 1.05
